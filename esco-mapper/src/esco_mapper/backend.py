@@ -87,6 +87,7 @@ async def course_occupations(course_number: str):
 async def skill_courses(uri: str):
     print(f"Received request for skill courses: {uri}")
     data = get_skill_courses(uri, globals())
+    print(f"Data for skill courses: {data}")
     if data is None:
         raise HTTPException(status_code=404, detail="Skill not found")
     return data
@@ -100,17 +101,17 @@ async def skill_detail(uri: str):
     return data
 
 
-@app.get("/api/v1/occupations/{occupation_uri}", response_model=OccupationDetailResponse)
-async def occupation_detail(occupation_uri: str):
-    data = get_occupation_detail(occupation_uri, globals())
+@app.get("/api/v1/occupations", response_model=OccupationDetailResponse)
+async def occupation_detail(uri: str):
+    data = get_occupation_detail(uri, globals())
     if data is None:
         raise HTTPException(status_code=404, detail="Occupation not found")
     return data
 
 
-@app.get("/api/v1/occupations/{occupation_uri}/courses", response_model=OccupationCoursesResponse)
-async def occupation_courses(occupation_uri: str):
-    data = get_occupation_courses(occupation_uri, globals())
+@app.get("/api/v1/occupations/courses", response_model=OccupationCoursesResponse)
+async def occupation_courses(uri: str):
+    data = get_occupation_courses(uri, globals())
     if data is None:
         raise HTTPException(status_code=404, detail="Occupation not found")
     return data

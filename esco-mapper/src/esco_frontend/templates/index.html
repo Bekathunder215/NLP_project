@@ -370,6 +370,25 @@
       </section>
     </main>
 
+    <section class="panel occupation-panel">
+      <h2>Occupation lookup</h2>
+
+      <div class="form-card">
+        <label>
+          <span>Occupation URI</span>
+          <input
+            id="occupation-uri"
+            type="text"
+            placeholder="http://data.europa.eu/esco/occupation/..."
+          />
+        </label>
+
+        <button id="occupation-btn" type="button">Load occupation</button>
+      </div>
+
+      <div id="occupation-detail" class="detail" style="margin-top: 16px"></div>
+    </section>
+
     <footer class="footer">
       <span
         >Note: The browser calls the backend directly, so you may need CORS
@@ -391,6 +410,9 @@
       const resultCountEl = document.getElementById("result-count");
       const detailEl = document.getElementById("detail");
       const detailPill = document.getElementById("detail-pill");
+      const occupationInput = document.getElementById("occupation-uri");
+      const occupationBtn = document.getElementById("occupation-btn");
+      const occupationDetailEl = document.getElementById("occupation-detail");
 
       function setStatus(message, isError = false) {
         statusEl.textContent = message;
@@ -415,7 +437,7 @@
 
           const title = document.createElement("div");
           title.className = "result-title";
-          title.textContent = item.title || "Untitled course";
+          title.textContent = filterTitleClean(item.title, item.course_number);
 
           const meta = document.createElement("div");
           meta.className = "result-meta";
@@ -439,6 +461,25 @@
         }
       }
 
+      function filterTitleClean(title, courseNumber) {
+        if (!title) return "";
+
+        // 1. Create a Regex to find the course number.
+        // We use "\\b" (word boundaries) so we don't accidentally
+        // delete part of a larger number (like deleting '101' from '10123').
+        const escapedNumber = courseNumber.replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&",
+        );
+        const re = new RegExp(`\\b${escapedNumber}\\b`, "g");
+
+        return title
+          .replace(re, "") // Remove the course number everywhere
+          .replace(/^\W+/, "") // Remove leading non-alphanumeric chars (like dashes or dots)
+          .replace(/\s\s+/g, " ") // Collapse multiple spaces into one
+          .trim(); // Trim whitespace from ends
+      }
+
       function renderDetail(detail) {
         detailEl.innerHTML = "";
         if (!detail) {
@@ -446,8 +487,10 @@
           return;
         }
 
+        const cleanTitle = filterTitleClean(detail.title, detail.course_number);
+
         const heading = document.createElement("div");
-        heading.innerHTML = `<strong>${detail.course_number}</strong> ${detail.title || ""}`;
+        heading.innerHTML = `<strong>${detail.course_number}</strong> ${cleanTitle}`;
 
         const description = document.createElement("div");
         description.textContent =
@@ -461,7 +504,6 @@
 
         if (detail.matched_skills && detail.matched_skills.length > 0) {
           detail.matched_skills.forEach((skill) => {
-            console.log("Rendering skill:", skill);
             const chip = document.createElement("button");
             chip.className = "skill";
             chip.textContent = skill.label;
@@ -524,7 +566,7 @@
               setStatus("Loading related courses...");
 
               const coursesResponse = await fetch(
-                `${base}/api/v1/skills/courses?uri=${encodeURIComponent(skillUri)}`,
+                `${base}/skills/courses?uri=${encodeURIComponent(skillUri)}`,
               );
 
               if (!coursesResponse.ok) {
@@ -539,7 +581,7 @@
               if (courses.length === 0) {
                 courseList.textContent = "No related courses found.";
               } else {
-                courses.forEach((course) => {
+                courses.courses.forEach((course) => {
                   const item = document.createElement("div");
                   item.style.marginBottom = "8px";
                   item.textContent = `${course.course_number} - ${course.title}`;
@@ -561,6 +603,85 @@
           detailEl.appendChild(box);
 
           setStatus("Skill detail loaded.");
+        } catch (error) {
+          setStatus(error.message, true);
+        }
+      }
+
+      async function fetchOccupation() {
+        const base = baseInput.value.trim().replace(/\/$/, "");
+        const occupationUri = occupationInput.value.trim();
+
+        if (!occupationUri) {
+          setStatus("Enter an occupation URI.", true);
+          return;
+        }
+
+        try {
+          setStatus("Loading occupation...");
+
+          const response = await fetch(
+            `${base}/occupations?uri=${encodeURIComponent(occupationUri)}`,
+          );
+
+          if (!response.ok) {
+            throw new Error("Failed to load occupation.");
+          }
+
+          const data = await response.json();
+
+          occupationDetailEl.innerHTML = "";
+
+          const title = document.createElement("h3");
+          title.textContent = data.occupation;
+
+          const essential = document.createElement("div");
+          essential.innerHTML = `
+      <strong>Essential skills</strong>
+      <div class="skill-list">
+        ${(data.essential_skills || [])
+          .map((s) => `<span class="skill">${s.label || s}</span>`)
+          .join("")}
+      </div>
+    `;
+
+          const optional = document.createElement("div");
+          optional.innerHTML = `
+      <strong>Optional skills</strong>
+      <div class="skill-list">
+        ${(data.optional_skills || [])
+          .map((s) => `<span class="skill">${s.label || s}</span>`)
+          .join("")}
+      </div>
+    `;
+
+          const courses = document.createElement("div");
+          courses.innerHTML = `
+      <strong>Recommended courses</strong>
+      <div class="result-list">
+        ${(data.recommended_courses || [])
+          .map(
+            (c) => `
+              <div class="result-card">
+                <div class="result-title">
+                  ${c.title || "Untitled"}
+                </div>
+                <div class="result-meta">
+                  ${c.course_number || ""}
+                </div>
+              </div>
+            `,
+          )
+          .join("")}
+      </div>
+    `;
+
+          occupationDetailEl.appendChild(title);
+          occupationDetailEl.appendChild(essential);
+          occupationDetailEl.appendChild(optional);
+          occupationDetailEl.appendChild(courses);
+
+          setStatus("Occupation loaded.");
         } catch (error) {
           setStatus(error.message, true);
         }
@@ -621,6 +742,7 @@
       modeSelect.addEventListener("change", toggleAlpha);
       alphaInput.addEventListener("input", updateAlphaValue);
       form.addEventListener("submit", handleSubmit);
+      occupationBtn.addEventListener("click", fetchOccupation);
 
       toggleAlpha();
       updateAlphaValue();

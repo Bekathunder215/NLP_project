@@ -90,6 +90,25 @@ def _find_first(paths: list[Path]) -> Path | None:
             return path
     return None
 
+def _esco_cache_dir(root: Path) -> Path:
+    return root / "data" / "esco"
+
+def _esco_indexes_path(root: Path) -> Path:
+    return _esco_cache_dir(root) / "esco_indexes.joblib"
+
+def _load_esco_indexes(root: Path) -> dict[str, Any] | None:
+    path = _esco_indexes_path(root)
+
+    if path.exists():
+        return load(path)
+
+    return None
+
+def _save_esco_indexes(indexes: dict[str, Any], root: Path) -> None:
+    cache_dir = _esco_cache_dir(root)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+
+    dump(indexes, _esco_indexes_path(root))
 
 def load_courses_jsonl() -> tuple[list[dict[str, Any]], Path | None]:
     root = _project_root()
@@ -227,8 +246,8 @@ WHERE {{
     # Try to get the literal form from the label node
     ?labelNode skosxl:literalForm ?label .
     
-    FILTER(STRSTARTS(STR(?skill), "{ESCO_SKILL_URI_PREFIX}"))
-    FILTER(LANGMATCHES(LANG(?label), "en"))
+    # FILTER(STRSTARTS(STR(?skill), "{ESCO_SKILL_URI_PREFIX}"))
+    # FILTER(LANGMATCHES(LANG(?label), "en"))
 }}
 {limit_clause}
 """
@@ -722,13 +741,21 @@ def build_pipeline() -> dict[str, Any]:
     }
 
     if not lazy_esco:
-        esco_state = compute_esco_indexes(
-            courses,
-            course_map,
-            skills,
-            occupations,
-        )
+        cached = _load_esco_indexes(root)
 
+        if cached is not None:
+            print("Loaded ESCO indexes from cache")
+            esco_state = cached
+        else:
+            print("Computing ESCO indexes...")
+            esco_state = compute_esco_indexes(
+                courses,
+                course_map,
+                skills,
+                occupations,
+            )
+            _save_esco_indexes(esco_state, root)
+            print("ESCO indexes saved to cache")
     return {
         "courses": courses,
         "courses_path": courses_path,
@@ -786,8 +813,9 @@ def get_course_skills(
 
 def get_skill_detail(skill_uri: str, state: dict[str, Any]) -> dict[str, Any] | None:
     esco_loaded = ensure_esco_loaded(state)
-    skill = state["skill_map"].get(skill_uri)
+    skill = esco_loaded["skill_map"].get(skill_uri)
     print(f"Getting details for skill {skill_uri}: {'found' if skill else 'not found'}")
+    print(f'skill is {skill}')
     if skill is None:
         return None
     return {
@@ -799,7 +827,9 @@ def get_skill_detail(skill_uri: str, state: dict[str, Any]) -> dict[str, Any] | 
 
 def get_skill_courses(skill_uri: str, state: dict[str, Any]) -> dict[str, Any] | None:
     esco_loaded = ensure_esco_loaded(state)
-    skill = state["skill_map"].get(skill_uri)
+    skill = esco_loaded["skill_map"].get(skill_uri)
+    print(f"Getting courses for skill {skill_uri}: {'found' if skill else 'not found'}")
+    print(f'skill is {skill}')
     if skill is None:
         return None
     return {
@@ -828,26 +858,27 @@ def get_occupation_detail(
     occupation_uri: str, state: dict[str, Any]
 ) -> dict[str, Any] | None:
     esco_loaded = ensure_esco_loaded(state)
-    occupation = state["occupation_map"].get(occupation_uri)
+    occupation = esco_loaded["occupation_map"].get(occupation_uri)
     if occupation is None:
         return None
 
-    skill_map = state["skill_map"]
+    skill_map = esco_loaded["skill_map"]
+    print(skill_map.get('http://data.europa.eu/esco/concept-scheme/6c930acd-c104-4ece-acf7-f44fd7333036'))
     essential = [
         {
             "skill_uri": uri,
-            "label": skill_map.get(uri, {}).get("label", uri),
+            "label": skill_map.get(uri, {}).get("label", 'Unknown Skill'),
         }
         for uri in occupation.get("essential_skills", [])
     ]
     optional = [
         {
             "skill_uri": uri,
-            "label": skill_map.get(uri, {}).get("label", uri),
+            "label": skill_map.get(uri, {}).get("label", 'Unknown Skill'),
         }
         for uri in occupation.get("optional_skills", [])
     ]
-    recommended = state["occupation_course_matches"].get(occupation_uri, [])
+    recommended = esco_loaded["occupation_course_matches"].get(occupation_uri, [])
 
     return {
         "occupation": occupation.get("label"),
@@ -860,14 +891,14 @@ def get_occupation_detail(
 def get_occupation_courses(
     occupation_uri: str, state: dict[str, Any]
 ) -> dict[str, Any] | None:
-    ensure_esco_loaded(state)
+    esco_loaded = ensure_esco_loaded(state)
     occupation = state["occupation_map"].get(occupation_uri)
     if occupation is None:
         return None
     return {
         "occupation_uri": occupation_uri,
         "label": occupation.get("label"),
-        "courses": state["occupation_course_matches"].get(occupation_uri, []),
+        "courses": esco_loaded["occupation_course_matches"].get(occupation_uri, []),
     }
 
 
@@ -1068,7 +1099,6 @@ def compute_esco_indexes(
         occupation["occupation_uri"]: occupation for occupation in occupations
     }
     print(f"---Computing skill matches for {len(courses)} courses and {len(skills)} skills...")
-
     course_skill_matches: dict[str, list[dict[str, Any]]] = {}
     course_skill_uris: dict[str, set[str]] = {}
     skill_course_matches: dict[str, list[dict[str, Any]]] = {
