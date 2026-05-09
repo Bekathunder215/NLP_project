@@ -1,0 +1,30 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Logs and temporary files
+*.log
+*.out
+*.tmp
+
+# VS Code
+.vscode/
+
+# JetBrains IDEs
+.idea/
+
+# System files
+Thumbs.db
+
+# Node.js
+node_modules/
+npm-debug.log
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
