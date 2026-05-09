@@ -5,8 +5,3 @@ pydantic
 python-dotenv
 chromadb
 joblib
-openai
-scikit-learn
-sentence-transformers
-pytest
-qlever

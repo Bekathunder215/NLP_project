@@ -5,9 +5,14 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY requirementsBase.txt .
+COPY requirementsML.txt .
+ENV PIP_NO_CACHE_DIR=1
+ENV TORCH_CUDA_ARCH_LIST="cpu"
+ENV FORCE_CUDA="0"
 
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirementsBase.txt
+RUN pip install --no-cache-dir -r requirementsML.txt
 
 COPY src/ ./src/
 

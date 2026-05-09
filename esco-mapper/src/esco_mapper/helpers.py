@@ -72,8 +72,16 @@ def _project_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
-def _workspace_root(root: Path) -> Path:
-    return root.parents[1]
+def _workspace_root(root: Path):
+    p = Path(root)
+
+    # walk upwards until we find "data" or "src"
+    for parent in [p] + list(p.parents):
+        if (parent / "data").exists() and (parent / "src").exists():
+            return parent
+
+    # fallback
+    return Path("/app")
 
 
 def _vectorizer_cache_dir(root: Path) -> Path:
