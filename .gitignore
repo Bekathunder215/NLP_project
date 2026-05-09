@@ -21,6 +21,10 @@ vectorizer_cache/
 data/
 chroma_db/
 
+#envs
+.env
+.env.example
+
 
 # System files
 Thumbs.db
