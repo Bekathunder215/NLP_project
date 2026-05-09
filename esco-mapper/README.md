@@ -4,15 +4,23 @@ Minimal FastAPI skeleton for mapping DTU courses to ESCO skills and occupations.
 
 ## Run
 
-1. Create and activate a virtual environment.
-2. Install dependencies:
-   `pip install -r requirements.txt`
-3. Start the API:
-   `uvicorn esco_mapper.backend:app --reload --app-dir src`
-4. Start the frontend:
-   `uvicorn esco_frontend.app:app --reload --port 8001 --app-dir src`
-5. Open the UI at http://localhost:8001
-6. Tests with `pytest tests`
+### Prerequisites
+
+1. Please ensure you have Python 3.10+ installed.
+2. Ensure you have an .nt file from the esco-v1.2.1.rdf if you want to use the QLever integration.
+
+after this, you can run the backend and frontend with:
+
+```bash
+docker compose up
+```
+
+3. Create and activate a virtual environment.
+4. Install dependencies: `pip install -r requirements.txt`
+5. Start the API: `uvicorn esco_mapper.backend:app --reload --app-dir src`
+6. Start the frontend: `uvicorn esco_frontend.app:app --reload --port 8001 --app-dir src`
+7. Open the UI at http://localhost:8001
+8. Tests with `pytest tests`
 
 Frontend notes:
 
@@ -26,7 +34,8 @@ Frontend notes:
 - Falls back to Assignments/infoRetrieval/data/dtu_courses.jsonl if present.
 - Optional ESCO data files:
   - data/esco_skills.json (list of {"skill_uri", "label"})
-  - data/esco_occupations.json (list of {"occupation_uri", "label", "essential_skills", "optional_skills"})
+  - data/esco_occupations.json (list of {"occupation_uri", "label", "essential_skills",
+    "optional_skills"})
 
 ## QLever (ESCO RDF)
 
@@ -41,8 +50,8 @@ Frontend notes:
 
 Notes:
 
-- The ESCO file is RDF/XML. If indexing fails, convert to N-Triples and update
-  Qleverfile to point at the .nt file.
+- The ESCO file is RDF/XML. If indexing fails, convert to N-Triples and update Qleverfile to point
+  at the .nt file.
 - The backend proxy uses `QLEVER_URL` (see .env.example).
 
 ## Endpoints

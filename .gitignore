@@ -23,7 +23,6 @@ chroma_db/
 
 #envs
 .env
-.env.example
 
 
 # System files
