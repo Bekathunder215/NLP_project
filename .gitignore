@@ -17,9 +17,9 @@ venv/
 .vscode/
 
 # caches and indexes
-esco_mapper/vectorizer_cache/
-esco_mapper/data/
-esco_mapper/chroma_db/
+vectorizer_cache/
+data/
+chroma_db/
 
 
 # System files
