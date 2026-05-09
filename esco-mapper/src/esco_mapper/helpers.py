@@ -191,6 +191,13 @@ def _env_int(name: str) -> int | None:
     return parsed if parsed > 0 else None
 
 
+def _env_flag(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _env_predicates(name: str, default: list[str]) -> list[str]:
     value = os.getenv(name)
     if not value:
@@ -209,27 +216,32 @@ def _load_esco_skills_from_qlever(limit: int | None = None) -> list[dict[str, An
     limit_clause = f"LIMIT {limit}" if limit else ""
     sparql = f"""
 PREFIX skosxl: <http://www.w3.org/2008/05/skos-xl#>
-SELECT ?skill (SAMPLE(?label) AS ?label)
+SELECT ?skill ?label
 WHERE {{
     ?skill skosxl:prefLabel ?labelNode .
     ?labelNode skosxl:literalForm ?label .
     FILTER(STRSTARTS(STR(?skill), \"{ESCO_SKILL_URI_PREFIX}\"))
-    FILTER(LANGMATCHES(LANG(?label), \"en\"))
+    FILTER(LANG(?label) = \"en\")
 }}
-GROUP BY ?skill
 {limit_clause}
 """
 
     results = run_sparql_query_sync(sparql)
-    skills: list[dict[str, Any]] = []
+    skills_by_uri: dict[str, str] = {}
     for binding in _sparql_bindings(results):
-            skill_uri = _sparql_value(binding, "skill")
-            label = _sparql_value(binding, "label")
-            if skill_uri and label:
-                    skills.append({"skill_uri": skill_uri, "label": label})
+        skill_uri = _sparql_value(binding, "skill")
+        label = _sparql_value(binding, "label")
+        if not skill_uri or not label:
+            continue
+        skills_by_uri.setdefault(skill_uri, label)
+
+    skills = [
+        {"skill_uri": skill_uri, "label": label}
+        for skill_uri, label in skills_by_uri.items()
+    ]
 
     if skills:
-            return skills
+        return skills
 
     sparql_fallback = f"""
 PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
@@ -252,10 +264,10 @@ WHERE {{
 
     results = run_sparql_query_sync(sparql_fallback)
     for binding in _sparql_bindings(results):
-            skill_uri = _sparql_value(binding, "skill")
-            label = _sparql_value(binding, "label")
-            if skill_uri and label:
-                    skills.append({"skill_uri": skill_uri, "label": label})
+        skill_uri = _sparql_value(binding, "skill")
+        label = _sparql_value(binding, "label")
+        if skill_uri and label:
+            skills.append({"skill_uri": skill_uri, "label": label})
     return skills
 
 
@@ -265,31 +277,34 @@ def _load_esco_occupations_from_qlever(
     limit_clause = f"LIMIT {limit}" if limit else ""
     sparql = f"""
 PREFIX skosxl: <http://www.w3.org/2008/05/skos-xl#>
-SELECT ?occupation (SAMPLE(?label) AS ?label)
+SELECT ?occupation ?label
 WHERE {{
     ?occupation skosxl:prefLabel ?labelNode .
     ?labelNode skosxl:literalForm ?label .
     FILTER(STRSTARTS(STR(?occupation), \"{ESCO_OCCUPATION_URI_PREFIX}\"))
-    FILTER(LANGMATCHES(LANG(?label), \"en\"))
+    FILTER(LANG(?label) = \"en\")
 }}
-GROUP BY ?occupation
 {limit_clause}
 """
 
     results = run_sparql_query_sync(sparql)
-    occupations: list[dict[str, Any]] = []
+    occupations_by_uri: dict[str, dict[str, Any]] = {}
     for binding in _sparql_bindings(results):
-            occupation_uri = _sparql_value(binding, "occupation")
-            label = _sparql_value(binding, "label")
-            if occupation_uri and label:
-                    occupations.append(
-                            {
-                                    "occupation_uri": occupation_uri,
-                                    "label": label,
-                                    "essential_skills": [],
-                                    "optional_skills": [],
-                            }
-                    )
+        occupation_uri = _sparql_value(binding, "occupation")
+        label = _sparql_value(binding, "label")
+        if not occupation_uri or not label:
+            continue
+        occupations_by_uri.setdefault(
+            occupation_uri,
+            {
+                "occupation_uri": occupation_uri,
+                "label": label,
+                "essential_skills": [],
+                "optional_skills": [],
+            },
+        )
+
+    occupations = list(occupations_by_uri.values())
 
     if not occupations:
         sparql_fallback = f"""
@@ -313,17 +328,17 @@ WHERE {{
 
     results = run_sparql_query_sync(sparql_fallback)
     for binding in _sparql_bindings(results):
-            occupation_uri = _sparql_value(binding, "occupation")
-            label = _sparql_value(binding, "label")
-            if occupation_uri and label:
-                    occupations.append(
-                            {
-                                    "occupation_uri": occupation_uri,
-                                    "label": label,
-                                    "essential_skills": [],
-                                    "optional_skills": [],
-                            }
-                    )
+        occupation_uri = _sparql_value(binding, "occupation")
+        label = _sparql_value(binding, "label")
+        if occupation_uri and label:
+            occupations.append(
+                {
+                    "occupation_uri": occupation_uri,
+                    "label": label,
+                    "essential_skills": [],
+                    "optional_skills": [],
+                }
+            )
 
     occupation_map = {item["occupation_uri"]: item for item in occupations}
     if not occupation_map:
@@ -656,7 +671,12 @@ def match_skills_for_course(
             }
         )
 
-    llm_matches = _llm_stub_matches(course_text, skills)
+    llm_matches: list[dict[str, Any]] = []
+    if _env_flag("ENABLE_LLM_MATCHING", False):
+        try:
+            llm_matches = _llm_stub_matches(course_text, skills)
+        except Exception as exc:
+            print(f"LLM matching skipped due to error: {exc}")
 
     merged: dict[str, dict[str, Any]] = {}
     for match in keyword_matches + llm_matches:
@@ -688,42 +708,12 @@ def _course_description(course: dict[str, Any]) -> str | None:
     return None
 
 
-def build_pipeline() -> dict[str, Any]:
-    print("Building data pipeline and loading resources...")
-    courses, courses_path = load_courses_jsonl()
-    print(f"Loaded {len(courses)} courses from {courses_path or 'default data'}")
-    skills = load_esco_skills()
-    print(f"Loaded {len(skills)} skills")
-    occupations = load_esco_occupations()
-    print(f"Loaded {len(occupations)} occupations")
-
-    root = _project_root()
-    course_texts: list[str] = []
-    course_ids: list[str] = []
-    course_metadatas: list[dict[str, Any]] = []
-    for course in courses:
-        course_id = course.get("course_code")
-        if not course_id:
-            continue
-        course_ids.append(course_id)
-        course_texts.append(course_to_text(course))
-        course_metadatas.append(_course_metadata(course))
-
-    embedding_provider, embed_fn = select_embedder()
-    chroma_dir = _chroma_dir(root)
-    collection, reindexed = _init_chroma_collection(
-        course_ids,
-        course_texts,
-        course_metadatas,
-        embed_fn,
-        chroma_dir,
-    )
-
-    vectorizer, tfidf_matrix = _load_sparse_index(
-        course_texts, _vectorizer_cache_dir(root)
-    )
-
-    course_map = {course.get("course_code"): course for course in courses}
+def _compute_esco_indexes(
+    courses: list[dict[str, Any]],
+    course_map: dict[str, dict[str, Any]],
+    skills: list[dict[str, Any]],
+    occupations: list[dict[str, Any]],
+) -> dict[str, Any]:
     skill_map = {skill["skill_uri"]: skill for skill in skills}
     occupation_map = {
         occupation["occupation_uri"]: occupation for occupation in occupations
@@ -772,7 +762,7 @@ def build_pipeline() -> dict[str, Any]:
 
     for occupation in occupations:
         occupation_uri = occupation["occupation_uri"]
-        label = occupation["label"]
+        label = occupation.get("label")
         essential = occupation.get("essential_skills", [])
         if not essential:
             occupation_course_matches[occupation_uri] = []
@@ -811,21 +801,10 @@ def build_pipeline() -> dict[str, Any]:
         occupation_course_matches[occupation_uri] = occ_courses
 
     return {
-        "courses": courses,
-        "courses_path": courses_path,
-        "course_texts": course_texts,
-        "course_ids": course_ids,
         "skills": skills,
         "occupations": occupations,
-        "course_map": course_map,
         "skill_map": skill_map,
         "occupation_map": occupation_map,
-        "chroma_collection": collection,
-        "embedding_provider": embedding_provider,
-        "embedding_fn": embed_fn,
-        "chroma_reindexed": reindexed,
-        "tfidf_vectorizer": vectorizer,
-        "tfidf_matrix": tfidf_matrix,
         "course_skill_matches": course_skill_matches,
         "skill_course_matches": skill_course_matches,
         "occupation_course_matches": occupation_course_matches,
@@ -834,9 +813,115 @@ def build_pipeline() -> dict[str, Any]:
     }
 
 
+def ensure_esco_loaded(state: dict[str, Any]) -> None:
+    if state.get("esco_loaded"):
+        return
+
+    skills = load_esco_skills()
+    occupations = load_esco_occupations()
+    esco_state = _compute_esco_indexes(
+        state["courses"],
+        state["course_map"],
+        skills,
+        occupations,
+    )
+    state.update(esco_state)
+    state["esco_loaded"] = True
+
+
+def build_pipeline() -> dict[str, Any]:
+    print("Building data pipeline and loading resources...")
+    courses, courses_path = load_courses_jsonl()
+    print(f"Loaded {len(courses)} courses from {courses_path or 'default data'}")
+    lazy_esco = _env_flag("ESCO_LAZY_LOAD", True)
+    if lazy_esco:
+        skills: list[dict[str, Any]] = []
+        occupations: list[dict[str, Any]] = []
+        print("Skipping ESCO load on startup (lazy mode enabled)")
+    else:
+        skills = load_esco_skills()
+        print(f"Loaded {len(skills)} skills")
+        occupations = load_esco_occupations()
+        print(f"Loaded {len(occupations)} occupations")
+
+    root = _project_root()
+    course_texts: list[str] = []
+    course_ids: list[str] = []
+    course_metadatas: list[dict[str, Any]] = []
+    for course in courses:
+        course_id = course.get("course_code")
+        if not course_id:
+            continue
+        course_ids.append(course_id)
+        course_texts.append(course_to_text(course))
+        course_metadatas.append(_course_metadata(course))
+
+    embedding_provider, embed_fn = select_embedder()
+    chroma_dir = _chroma_dir(root)
+    collection, reindexed = _init_chroma_collection(
+        course_ids,
+        course_texts,
+        course_metadatas,
+        embed_fn,
+        chroma_dir,
+    )
+
+    vectorizer, tfidf_matrix = _load_sparse_index(
+        course_texts, _vectorizer_cache_dir(root)
+    )
+
+    course_map = {course.get("course_code"): course for course in courses}
+    esco_state: dict[str, Any] = {
+        "skills": skills,
+        "occupations": occupations,
+        "skill_map": {skill["skill_uri"]: skill for skill in skills},
+        "occupation_map": {
+            occupation["occupation_uri"]: occupation for occupation in occupations
+        },
+        "course_skill_matches": {},
+        "skill_course_matches": {},
+        "occupation_course_matches": {},
+        "course_occupation_matches": {course_number: [] for course_number in course_map},
+        "skill_occupation_map": {},
+    }
+
+    if not lazy_esco:
+        esco_state = _compute_esco_indexes(
+            courses,
+            course_map,
+            skills,
+            occupations,
+        )
+
+    return {
+        "courses": courses,
+        "courses_path": courses_path,
+        "course_texts": course_texts,
+        "course_ids": course_ids,
+        "skills": esco_state["skills"],
+        "occupations": esco_state["occupations"],
+        "course_map": course_map,
+        "skill_map": esco_state["skill_map"],
+        "occupation_map": esco_state["occupation_map"],
+        "chroma_collection": collection,
+        "embedding_provider": embedding_provider,
+        "embedding_fn": embed_fn,
+        "chroma_reindexed": reindexed,
+        "tfidf_vectorizer": vectorizer,
+        "tfidf_matrix": tfidf_matrix,
+        "course_skill_matches": esco_state["course_skill_matches"],
+        "skill_course_matches": esco_state["skill_course_matches"],
+        "occupation_course_matches": esco_state["occupation_course_matches"],
+        "course_occupation_matches": esco_state["course_occupation_matches"],
+        "skill_occupation_map": esco_state["skill_occupation_map"],
+        "esco_loaded": not lazy_esco,
+    }
+
+
 def get_course_detail(
     course_number: str, state: dict[str, Any]
 ) -> dict[str, Any] | None:
+    ensure_esco_loaded(state)
     course = state["course_map"].get(course_number)
     if course is None:
         return None
@@ -852,6 +937,7 @@ def get_course_detail(
 def get_course_skills(
     course_number: str, state: dict[str, Any]
 ) -> dict[str, Any] | None:
+    ensure_esco_loaded(state)
     course = state["course_map"].get(course_number)
     if course is None:
         return None
@@ -862,6 +948,7 @@ def get_course_skills(
 
 
 def get_skill_detail(skill_uri: str, state: dict[str, Any]) -> dict[str, Any] | None:
+    ensure_esco_loaded(state)
     skill = state["skill_map"].get(skill_uri)
     if skill is None:
         return None
@@ -873,6 +960,7 @@ def get_skill_detail(skill_uri: str, state: dict[str, Any]) -> dict[str, Any] | 
 
 
 def get_skill_courses(skill_uri: str, state: dict[str, Any]) -> dict[str, Any] | None:
+    ensure_esco_loaded(state)
     skill = state["skill_map"].get(skill_uri)
     if skill is None:
         return None
@@ -886,6 +974,7 @@ def get_skill_courses(skill_uri: str, state: dict[str, Any]) -> dict[str, Any] |
 def get_course_occupations(
     course_number: str, state: dict[str, Any]
 ) -> dict[str, Any] | None:
+    ensure_esco_loaded(state)
     if course_number not in state["course_map"]:
         return None
     return {
@@ -899,6 +988,7 @@ def get_course_occupations(
 def get_occupation_detail(
     occupation_uri: str, state: dict[str, Any]
 ) -> dict[str, Any] | None:
+    ensure_esco_loaded(state)
     occupation = state["occupation_map"].get(occupation_uri)
     if occupation is None:
         return None
@@ -931,6 +1021,7 @@ def get_occupation_detail(
 def get_occupation_courses(
     occupation_uri: str, state: dict[str, Any]
 ) -> dict[str, Any] | None:
+    ensure_esco_loaded(state)
     occupation = state["occupation_map"].get(occupation_uri)
     if occupation is None:
         return None
@@ -1096,6 +1187,7 @@ def recommend_courses_for_occupation(
 
 
 def handle_query(request: Any, state: dict[str, Any]) -> dict[str, Any]:
+    ensure_esco_loaded(state)
     occupation_uri, confidence = match_occupation(request.question, state)
     occupation = state["occupation_map"].get(occupation_uri, {})
 
