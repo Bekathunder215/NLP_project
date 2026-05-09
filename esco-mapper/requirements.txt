@@ -1,0 +1,14 @@
+fastapi
+httpx
+uvicorn
+pydantic
+python-dotenv
+chromadb
+joblib
+numpy
+openai
+scikit-learn
+sentence-transformers
+pytest
+chromadb
+qlever
