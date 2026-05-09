@@ -1,0 +1,21 @@
+[data]
+NAME = output_esco
+DESCRIPTION = ESCO v1.2.1 nt snapshot
+
+[index]
+INPUT_FILES = output_esco.nt
+CAT_INPUT_FILES = cat output_esco.nt
+
+[server]
+PORT = 7654
+TIMEOUT = 30s
+
+[runtime]
+SYSTEM = docker
+IMAGE = docker.io/adfreiburg/qlever:latest
+
+[ui]
+UI_CONFIG = Qleverfile-ui.yml
+UI_PORT = 8176
+UI_SYSTEM = docker
+UI_IMAGE = docker.io/adfreiburg/qlever-ui
