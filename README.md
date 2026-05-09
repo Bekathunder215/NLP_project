@@ -8,6 +8,7 @@ Minimal FastAPI skeleton for mapping DTU courses to ESCO skills and occupations.
 
 1. Please ensure you have Python 3.10+ installed.
 2. Ensure you have an .nt file from the esco-v1.2.1.rdf if you want to use the QLever integration.
+3. you are running everything from inside esco-mapper/ (where this README is located).
 
 after this, you can run the backend and frontend with:
 
