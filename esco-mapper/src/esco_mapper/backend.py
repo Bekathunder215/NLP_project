@@ -83,17 +83,18 @@ async def course_occupations(course_number: str):
     return data
 
 
-@app.get("/api/v1/skills/{skill_uri}", response_model=SkillDetailResponse)
-async def skill_detail(skill_uri: str):
-    data = get_skill_detail(skill_uri, globals())
+@app.get("/api/v1/skills/courses", response_model=SkillCoursesResponse)
+async def skill_courses(uri: str):
+    print(f"Received request for skill courses: {uri}")
+    data = get_skill_courses(uri, globals())
     if data is None:
         raise HTTPException(status_code=404, detail="Skill not found")
     return data
 
-
-@app.get("/api/v1/skills/{skill_uri}/courses", response_model=SkillCoursesResponse)
-async def skill_courses(skill_uri: str):
-    data = get_skill_courses(skill_uri, globals())
+@app.get("/api/v1/skills", response_model=SkillDetailResponse)
+async def skill_detail(uri: str):
+    print(f"Received request for skill detail: {uri}")
+    data = get_skill_detail(uri, globals())
     if data is None:
         raise HTTPException(status_code=404, detail="Skill not found")
     return data

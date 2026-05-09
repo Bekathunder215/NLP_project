@@ -248,8 +248,15 @@
         padding: 6px 10px;
         border-radius: 999px;
         font-size: 0.8rem;
+        border: none;
+        cursor: pointer;
+        transition: all 0.2s ease;
       }
 
+      .skill:hover {
+        background: rgba(212, 119, 42, 0.28);
+        transform: translateY(-1px);
+      }
       .footer {
         margin-top: 40px;
         font-size: 0.85rem;
@@ -401,7 +408,6 @@
 
       function renderResults(results) {
         resultsEl.innerHTML = "";
-        console.log("Rendering results:", results);
         results.forEach((item, index) => {
           const card = document.createElement("article");
           card.className = "result-card";
@@ -455,9 +461,15 @@
 
         if (detail.matched_skills && detail.matched_skills.length > 0) {
           detail.matched_skills.forEach((skill) => {
-            const chip = document.createElement("span");
+            console.log("Rendering skill:", skill);
+            const chip = document.createElement("button");
             chip.className = "skill";
             chip.textContent = skill.label;
+
+            chip.addEventListener("click", () => {
+              fetchSkill(skill.skill_uri);
+            });
+
             skillWrap.appendChild(chip);
           });
         } else {
@@ -468,6 +480,90 @@
         detailEl.appendChild(description);
         detailEl.appendChild(ects);
         detailEl.appendChild(skillWrap);
+      }
+
+      async function fetchSkill(skillUri) {
+        const base = baseInput.value.trim().replace(/\/$/, "");
+
+        try {
+          setStatus("Loading skill details...");
+
+          const response = await fetch(
+            `${base}/skills/?uri=${encodeURIComponent(skillUri)}`,
+          );
+
+          if (!response.ok) {
+            throw new Error("Failed to load skill details.");
+          }
+
+          const skill = await response.json();
+
+          const existing = document.getElementById("skill-detail");
+          if (existing) existing.remove();
+
+          const box = document.createElement("div");
+          box.id = "skill-detail";
+          box.style.marginTop = "16px";
+          box.style.padding = "16px";
+          box.style.border = "1px solid var(--border)";
+          box.style.borderRadius = "16px";
+          box.style.background = "white";
+
+          const title = document.createElement("h3");
+          title.textContent = skill.label || "Skill";
+
+          const description = document.createElement("p");
+          description.textContent =
+            skill.description || "No description available.";
+
+          const coursesButton = document.createElement("button");
+          coursesButton.textContent = "View related courses";
+
+          coursesButton.addEventListener("click", async () => {
+            try {
+              setStatus("Loading related courses...");
+
+              const coursesResponse = await fetch(
+                `${base}/api/v1/skills/courses?uri=${encodeURIComponent(skillUri)}`,
+              );
+
+              if (!coursesResponse.ok) {
+                throw new Error("Failed to load related courses.");
+              }
+
+              const courses = await coursesResponse.json();
+
+              const courseList = document.createElement("div");
+              courseList.style.marginTop = "12px";
+
+              if (courses.length === 0) {
+                courseList.textContent = "No related courses found.";
+              } else {
+                courses.forEach((course) => {
+                  const item = document.createElement("div");
+                  item.style.marginBottom = "8px";
+                  item.textContent = `${course.course_number} - ${course.title}`;
+                  courseList.appendChild(item);
+                });
+              }
+
+              box.appendChild(courseList);
+              setStatus("Related courses loaded.");
+            } catch (error) {
+              setStatus(error.message, true);
+            }
+          });
+
+          box.appendChild(title);
+          box.appendChild(description);
+          box.appendChild(coursesButton);
+
+          detailEl.appendChild(box);
+
+          setStatus("Skill detail loaded.");
+        } catch (error) {
+          setStatus(error.message, true);
+        }
       }
 
       async function fetchDetails(courseNumber) {

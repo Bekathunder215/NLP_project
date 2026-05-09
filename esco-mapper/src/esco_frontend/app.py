@@ -20,7 +20,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
+BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000/api/v1")
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):

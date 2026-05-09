@@ -785,38 +785,40 @@ def get_course_skills(
 
 
 def get_skill_detail(skill_uri: str, state: dict[str, Any]) -> dict[str, Any] | None:
-    ensure_esco_loaded(state)
+    esco_loaded = ensure_esco_loaded(state)
     skill = state["skill_map"].get(skill_uri)
+    print(f"Getting details for skill {skill_uri}: {'found' if skill else 'not found'}")
     if skill is None:
         return None
     return {
         "skill_uri": skill_uri,
         "label": skill.get("label"),
-        "related_occupations": state["skill_occupation_map"].get(skill_uri, []),
+        "related_occupations": esco_loaded["skill_occupation_map"].get(skill_uri, []),
     }
 
 
 def get_skill_courses(skill_uri: str, state: dict[str, Any]) -> dict[str, Any] | None:
-    ensure_esco_loaded(state)
+    esco_loaded = ensure_esco_loaded(state)
     skill = state["skill_map"].get(skill_uri)
     if skill is None:
         return None
     return {
         "skill_uri": skill_uri,
         "label": skill.get("label"),
-        "courses": state["skill_course_matches"].get(skill_uri, []),
+        "courses": esco_loaded["skill_course_matches"].get(skill_uri, []),
     }
 
 
 def get_course_occupations(
     course_number: str, state: dict[str, Any]
 ) -> dict[str, Any] | None:
-    ensure_esco_loaded(state)
+    esco_loaded = ensure_esco_loaded(state)
     if course_number not in state["course_map"]:
+        print(f"Course number {course_number} not found in course map.")
         return None
     return {
         "course_number": course_number,
-        "relevant_occupations": state["course_occupation_matches"].get(
+        "relevant_occupations": esco_loaded["course_occupation_matches"].get(
             course_number, []
         ),
     }
@@ -825,7 +827,7 @@ def get_course_occupations(
 def get_occupation_detail(
     occupation_uri: str, state: dict[str, Any]
 ) -> dict[str, Any] | None:
-    ensure_esco_loaded(state)
+    esco_loaded = ensure_esco_loaded(state)
     occupation = state["occupation_map"].get(occupation_uri)
     if occupation is None:
         return None
