@@ -15,6 +15,8 @@ after this, you can run the backend and frontend with:
 docker compose up
 ```
 
+if you do not want docker, follow these steps:
+
 3. Create and activate a virtual environment.
 4. Install dependencies: `pip install -r requirements.txt`
 5. Start the API: `uvicorn esco_mapper.backend:app --reload --app-dir src`
@@ -32,10 +34,9 @@ Frontend notes:
 
 - Looks for data/dtu_courses.jsonl first.
 - Falls back to Assignments/infoRetrieval/data/dtu_courses.jsonl if present.
-- Optional ESCO data files:
-  - data/esco_skills.json (list of {"skill_uri", "label"})
-  - data/esco_occupations.json (list of {"occupation_uri", "label", "essential_skills",
-    "optional_skills"})
+- (Optional) ESCO data files:
+  - data/output_esco.nt full database, that is queried by sparkql (has lists of {"skill_uri",
+    "label", "occupation_uris", "skill_uris" ... })
 
 ## QLever (ESCO RDF)
 
@@ -56,12 +57,16 @@ Notes:
 
 ## Endpoints
 
-- GET /courses/{course_number}
-- GET /skills/{skill_uri}
-- GET /occupations/{occupation_uri}
-- GET /courses/{course_number}/skills
-- GET /skills/{skill_uri}/courses
-- GET /occupations/{occupation_uri}/courses
-- GET /courses/{course_number}/occupations
-- POST /query
-- POST /v1/query (proxy SPARQL to QLever)
+- GET /api/v1/courses/{course_number}
+- GET /api/v1/courses/{course_number}/occupations
+- GET /api/v1/skills
+- GET /api/v1/skills/courses
+- GET /api/v1/occupations
+- GET /api/v1/search
+
+## DOCS
+
+you can always look for the docs at
+
+- Backend: http://backend.esco-mapper.orb.local:8000/docs (most important)
+- FrontEnd: http://localhost:8001/docs
