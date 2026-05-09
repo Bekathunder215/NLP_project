@@ -16,8 +16,11 @@ venv/
 # VS Code
 .vscode/
 
-# JetBrains IDEs
-.idea/
+# caches and indexes
+esco_mapper/vectorizer_cache/
+esco_mapper/data/
+esco_mapper/chroma_db/
+
 
 # System files
 Thumbs.db
