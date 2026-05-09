@@ -5,12 +5,15 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt
+COPY requirements.txt .
 
-COPY src/ /app/src/
-COPY frontend/ /app/frontend/
-RUN mkdir -p /app/chroma_db /app/vectorizer_cache
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY src/ ./src/
+
+# Optional env vars
+ENV ESCO_LAZY_LOAD=false
+ENV QLEVER_URL=http://qlever:7654
 
 EXPOSE 8000
 

@@ -1,0 +1,45 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: dockerfiles/backend.dockerfile
+    volumes:
+      - ./data:/app/data
+      - ./vectorizer_cache:/app/vectorizer_cache
+      - ./chroma:/app/chroma
+    ports:
+      - "8000:8000"
+    environment:
+      ESCO_LAZY_LOAD: "false"
+      QLEVER_URL: "http://qlever:7654"
+
+    depends_on:
+      - qlever
+
+  frontend:
+    build:
+      context: .
+      dockerfile: dockerfiles/frontend.dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      BACKEND_URL: "http://backend:8000"
+
+    depends_on:
+      - backend
+
+  qlever:
+    image: adfreiburg/qlever:latest
+    container_name: qlever
+
+    ports:
+      - "7654:7654"
+
+    volumes:
+      - ./data:/index
+
+    working_dir: /index
+
+    entrypoint: bash
+    command: >
+      -c "qlever-server -i output_esco -j 8 -p 7654 -m 5G -c 2G -e 1G -k 200 -s 30s"
