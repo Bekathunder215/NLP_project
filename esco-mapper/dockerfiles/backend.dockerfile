@@ -11,7 +11,10 @@ ENV PIP_NO_CACHE_DIR=1
 ENV TORCH_CUDA_ARCH_LIST="cpu"
 ENV FORCE_CUDA="0"
 
+RUN pip install torch --index-url https://download.pytorch.org/whl/cpu
+
 RUN pip install --no-cache-dir -r requirementsBase.txt
+
 RUN pip install --no-cache-dir -r requirementsML.txt
 
 COPY src/ ./src/

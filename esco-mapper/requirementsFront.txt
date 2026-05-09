@@ -3,3 +3,4 @@ httpx
 uvicorn
 pydantic
 python-dotenv
+jinja2
