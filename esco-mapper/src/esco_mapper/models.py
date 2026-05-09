@@ -1,3 +1,5 @@
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -63,6 +65,19 @@ class OccupationDetailResponse(BaseModel):
     essential_skills: list[SkillRef] = Field(default_factory=list)
     optional_skills: list[SkillRef] = Field(default_factory=list)
     recommended_courses: list[RecommendedCourse] = Field(default_factory=list)
+
+
+class RecommendedCourse2(BaseModel):
+    course_number: str | None = None
+    title: str | None = None
+    description: str | None = None
+
+
+class OccupationDetailResponse2(BaseModel):
+    occupation: str | None
+    essential_skills: Any
+    optional_skills: Any
+    recommended_courses: Any
 
 
 class OccupationCoursesResponse(BaseModel):

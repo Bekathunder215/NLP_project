@@ -90,11 +90,14 @@ def _find_first(paths: list[Path]) -> Path | None:
             return path
     return None
 
+
 def _esco_cache_dir(root: Path) -> Path:
     return root / "data" / "esco"
 
+
 def _esco_indexes_path(root: Path) -> Path:
     return _esco_cache_dir(root) / "esco_indexes.joblib"
+
 
 def _load_esco_indexes(root: Path) -> dict[str, Any] | None:
     path = _esco_indexes_path(root)
@@ -104,11 +107,13 @@ def _load_esco_indexes(root: Path) -> dict[str, Any] | None:
 
     return None
 
+
 def _save_esco_indexes(indexes: dict[str, Any], root: Path) -> None:
     cache_dir = _esco_cache_dir(root)
     cache_dir.mkdir(parents=True, exist_ok=True)
 
     dump(indexes, _esco_indexes_path(root))
+
 
 def load_courses_jsonl() -> tuple[list[dict[str, Any]], Path | None]:
     root = _project_root()
@@ -230,9 +235,10 @@ def _sparql_property_path(uris: list[str]) -> str:
         return ""
     return "|".join(f"<{uri}>" for uri in uris)
 
+
 def _load_esco_skills_from_qlever(limit: int | None = None) -> list[dict[str, Any]]:
     limit_clause = f"LIMIT {limit}" if limit else ""
-    
+
     # We combine the "prefLabel" node and the "literalForm" into one path.
     # We use LANGMATCHES because it is more robust than LANG() == "en".
     sparql = f"""
@@ -246,16 +252,18 @@ WHERE {{
     # Try to get the literal form from the label node
     ?labelNode skosxl:literalForm ?label .
     
-    # FILTER(STRSTARTS(STR(?skill), "{ESCO_SKILL_URI_PREFIX}"))
-    # FILTER(LANGMATCHES(LANG(?label), "en"))
+    FILTER(STRSTARTS(STR(?skill), "{ESCO_SKILL_URI_PREFIX}"))
+    FILTER(LANGMATCHES(LANG(?label), "en"))
 }}
 {limit_clause}
 """
 
     results = run_sparql_query_sync(sparql)
-    print(f"-- QLever returned {len(_sparql_bindings(results))} skills from the first query.")
+    print(
+        f"-- QLever returned {len(_sparql_bindings(results))} skills from the first query."
+    )
     skills = []
-    
+
     for binding in _sparql_bindings(results):
         skill_uri = _sparql_value(binding, "skill")
         label = _sparql_value(binding, "label")
@@ -290,8 +298,8 @@ def _load_esco_occupations_from_qlever(
     limit: int | None = None,
 ) -> list[dict[str, Any]]:
     limit_clause = f"LIMIT {limit}" if limit else ""
-    
-    # 1. Primary Query: Try the flattened SKOS-XL version first 
+
+    # 1. Primary Query: Try the flattened SKOS-XL version first
     # (Matching your successful CURL test)
     sparql = f"""
 PREFIX skosxl: <http://www.w3.org/2008/05/skos-xl#>
@@ -305,10 +313,9 @@ WHERE {{
 """
 
     results = run_sparql_query_sync(sparql)
-    print(f"-- QLever returned {len(_sparql_bindings(results))} occupations from the flattened query.")
 
     occupations_by_uri: dict[str, dict[str, Any]] = {}
-    
+
     for binding in _sparql_bindings(results):
         occ_uri = _sparql_value(binding, "occupation")
         label = _sparql_value(binding, "label")
@@ -317,7 +324,7 @@ WHERE {{
                 "occupation_uri": occ_uri,
                 "label": label,
                 "essential_skills": [],
-                "optional_skills": []
+                "optional_skills": [],
             }
 
     # 2. Fallback: If 0 results, try the SKOS-XL Node path or standard SKOS
@@ -347,7 +354,7 @@ WHERE {{
                     "occupation_uri": occ_uri,
                     "label": label,
                     "essential_skills": [],
-                    "optional_skills": []
+                    "optional_skills": [],
                 }
 
     if not occupations_by_uri:
@@ -663,24 +670,23 @@ def _course_description(course: dict[str, Any]) -> str | None:
     return None
 
 
-
-
 def ensure_esco_loaded(state: dict[str, Any]) -> None:
     if state.get("esco_loaded"):
         return
 
     skills = load_esco_skills()
     occupations = load_esco_occupations()
-    print(f"---Data loaded:\n\t {len(skills)} skills,\n\t {len(occupations)} occupations")
+    print(
+        f"---Data loaded:\n\t {len(skills)} skills,\n\t {len(occupations)} occupations"
+    )
     esco_state = compute_esco_indexes(
         state["courses"],
         state["course_map"],
         skills,
         occupations,
     )
-    # print(esco_state)
-    # state.update(esco_state)
-    # state["esco_loaded"] = True
+    state.update(esco_state)
+    state["esco_loaded"] = True
     return esco_state
 
 
@@ -736,7 +742,9 @@ def build_pipeline() -> dict[str, Any]:
         "course_skill_matches": {},
         "skill_course_matches": {},
         "occupation_course_matches": {},
-        "course_occupation_matches": {course_number: [] for course_number in course_map},
+        "course_occupation_matches": {
+            course_number: [] for course_number in course_map
+        },
         "skill_occupation_map": {},
     }
 
@@ -784,9 +792,11 @@ def build_pipeline() -> dict[str, Any]:
 def get_course_detail(
     course_number: str, state: dict[str, Any]
 ) -> dict[str, Any] | None:
-    esco_state = ensure_esco_loaded(state)
+    ensure_esco_loaded(state)
     course = state["course_map"].get(course_number)
-    print(f"Getting details for course {course_number}: {'found' if course else 'not found'}")
+    print(
+        f"Getting details for course {course_number}: {'found' if course else 'not found'}"
+    )
     if course is None:
         return None
     return {
@@ -794,61 +804,59 @@ def get_course_detail(
         "title": course.get("title"),
         "description": _course_description(course),
         "ects": _course_ects(course),
-        "matched_skills": esco_state["course_skill_matches"].get(course_number, []),
+        "matched_skills": state["course_skill_matches"].get(course_number, []),
     }
 
 
 def get_course_skills(
     course_number: str, state: dict[str, Any]
 ) -> dict[str, Any] | None:
-    esco_loaded = ensure_esco_loaded(state)
+    ensure_esco_loaded(state)
     course = state["course_map"].get(course_number)
     if course is None:
         return None
     return {
         "course_number": course_number,
-        "matched_skills": esco_loaded["course_skill_matches"].get(course_number, []),
+        "matched_skills": state["course_skill_matches"].get(course_number, []),
     }
 
 
 def get_skill_detail(skill_uri: str, state: dict[str, Any]) -> dict[str, Any] | None:
-    esco_loaded = ensure_esco_loaded(state)
-    skill = esco_loaded["skill_map"].get(skill_uri)
+    ensure_esco_loaded(state)
+    skill = state["skill_map"].get(skill_uri)
     print(f"Getting details for skill {skill_uri}: {'found' if skill else 'not found'}")
-    print(f'skill is {skill}')
     if skill is None:
         return None
     return {
         "skill_uri": skill_uri,
         "label": skill.get("label"),
-        "related_occupations": esco_loaded["skill_occupation_map"].get(skill_uri, []),
+        "related_occupations": state["skill_occupation_map"].get(skill_uri, []),
     }
 
 
 def get_skill_courses(skill_uri: str, state: dict[str, Any]) -> dict[str, Any] | None:
-    esco_loaded = ensure_esco_loaded(state)
-    skill = esco_loaded["skill_map"].get(skill_uri)
+    ensure_esco_loaded(state)
+    skill = state["skill_map"].get(skill_uri)
     print(f"Getting courses for skill {skill_uri}: {'found' if skill else 'not found'}")
-    print(f'skill is {skill}')
     if skill is None:
         return None
     return {
         "skill_uri": skill_uri,
         "label": skill.get("label"),
-        "courses": esco_loaded["skill_course_matches"].get(skill_uri, []),
+        "courses": state["skill_course_matches"].get(skill_uri, []),
     }
 
 
 def get_course_occupations(
     course_number: str, state: dict[str, Any]
 ) -> dict[str, Any] | None:
-    esco_loaded = ensure_esco_loaded(state)
+    ensure_esco_loaded(state)
     if course_number not in state["course_map"]:
         print(f"Course number {course_number} not found in course map.")
         return None
     return {
         "course_number": course_number,
-        "relevant_occupations": esco_loaded["course_occupation_matches"].get(
+        "relevant_occupations": state["course_occupation_matches"].get(
             course_number, []
         ),
     }
@@ -857,48 +865,66 @@ def get_course_occupations(
 def get_occupation_detail(
     occupation_uri: str, state: dict[str, Any]
 ) -> dict[str, Any] | None:
-    esco_loaded = ensure_esco_loaded(state)
-    occupation = esco_loaded["occupation_map"].get(occupation_uri)
+    ensure_esco_loaded(state)
+    occupation = state["occupation_map"].get(occupation_uri)
     if occupation is None:
         return None
 
-    skill_map = esco_loaded["skill_map"]
-    print(skill_map.get('http://data.europa.eu/esco/concept-scheme/6c930acd-c104-4ece-acf7-f44fd7333036'))
+    skill_map = state["skill_map"]
     essential = [
         {
             "skill_uri": uri,
-            "label": skill_map.get(uri, {}).get("label", 'Unknown Skill'),
+            "label": skill_map.get(uri, {}).get("label", "Unknown Skill"),
         }
         for uri in occupation.get("essential_skills", [])
     ]
     optional = [
         {
             "skill_uri": uri,
-            "label": skill_map.get(uri, {}).get("label", 'Unknown Skill'),
+            "label": skill_map.get(uri, {}).get("label", "Unknown Skill"),
         }
         for uri in occupation.get("optional_skills", [])
     ]
-    recommended = esco_loaded["occupation_course_matches"].get(occupation_uri, [])
+    recommended_codes = state["occupation_course_matches"].get(occupation_uri, [])
+
+    reccomended_courses = []
+
+    for course in recommended_codes:
+        course_number = course.get("course_number")
+
+        course_obj = state["course_map"].get(course_number, {})
+        # print(course_obj.get("description"))
+
+        reccomended_courses.append(
+            {
+                "course_number": course_number,
+                "title": course_obj.get("title", "Unknown"),
+                "description": _course_description(
+                    course_obj
+                ),  # course_obj.get("description"),
+                # or _course_description(course_number),
+            }
+        )
 
     return {
         "occupation": occupation.get("label"),
         "essential_skills": essential,
         "optional_skills": optional,
-        "recommended_courses": recommended,
+        "recommended_courses": reccomended_courses,
     }
 
 
 def get_occupation_courses(
     occupation_uri: str, state: dict[str, Any]
 ) -> dict[str, Any] | None:
-    esco_loaded = ensure_esco_loaded(state)
+    ensure_esco_loaded(state)
     occupation = state["occupation_map"].get(occupation_uri)
     if occupation is None:
         return None
     return {
         "occupation_uri": occupation_uri,
         "label": occupation.get("label"),
-        "courses": esco_loaded["occupation_course_matches"].get(occupation_uri, []),
+        "courses": state["occupation_course_matches"].get(occupation_uri, []),
     }
 
 
@@ -911,7 +937,7 @@ def _dense_search(
     result = collection.query(
         query_embeddings=query_embedding,
         n_results=top_k,
-        include=["distances", "metadatas"],#, "ids"],
+        include=["distances", "metadatas"],  # , "ids"],
     )
 
     ids = result.get("ids", [[]])[0]
@@ -1098,7 +1124,9 @@ def compute_esco_indexes(
     occupation_map = {
         occupation["occupation_uri"]: occupation for occupation in occupations
     }
-    print(f"---Computing skill matches for {len(courses)} courses and {len(skills)} skills...")
+    print(
+        f"---Computing skill matches for {len(courses)} courses and {len(skills)} skills..."
+    )
     course_skill_matches: dict[str, list[dict[str, Any]]] = {}
     course_skill_uris: dict[str, set[str]] = {}
     skill_course_matches: dict[str, list[dict[str, Any]]] = {
@@ -1232,55 +1260,103 @@ def match_skills_for_course(
     return matches[:max_matches]
 
 
-
-
 {
-  "course_code": "02451",
-  "url": "https://kurser.dtu.dk/course/02451",
-  "title": "02451 Introduction to Machine Learning",
-  "academic_year": "2025/2026",
-  "fields": {
-    "Danish title": "Introduktion til machine learning",
-    "Language of instruction": "English",
-    "Point( ECTS )": 5,
-    "Course type": "BScOffered as a single course",
-    "Schedule": "Spring F4A (Tues 13-17)",
-    "Location": "Campus Lyngby",
-    "Scope and form": "The activities alternate between lectures, problem classes and hands-on Python exercises.",
-    "Duration of Course": "13 weeks",
-    "Date of examination": "The exam will be held on a special day: Click \"Date of examination\" to the left to see the date see DT",
-    "Type of assessment": [
-      "Written examination and exercises",
-      "Approval of assignments is a prerequisite for passing the course."
+    "course_code": "02451",
+    "url": "https://kurser.dtu.dk/course/02451",
+    "title": "02451 Introduction to Machine Learning",
+    "academic_year": "2025/2026",
+    "fields": {
+        "Danish title": "Introduktion til machine learning",
+        "Language of instruction": "English",
+        "Point( ECTS )": 5,
+        "Course type": "BScOffered as a single course",
+        "Schedule": "Spring F4A (Tues 13-17)",
+        "Location": "Campus Lyngby",
+        "Scope and form": "The activities alternate between lectures, problem classes and hands-on Python exercises.",
+        "Duration of Course": "13 weeks",
+        "Date of examination": 'The exam will be held on a special day: Click "Date of examination" to the left to see the date see DT',
+        "Type of assessment": [
+            "Written examination and exercises",
+            "Approval of assignments is a prerequisite for passing the course.",
+        ],
+        "Exam duration": "Written exam: 4 hours",
+        "Aid": [
+            "No Aid : Multiple choice.",
+            "No electronic aids (e.g., calculators).",
+            "Only allowed to bring two A4 sheets of handwritten notes.",
+        ],
+        "Evaluation": "7 step scale , external examiner",
+        "Previous Course": 2450,
+        "Not applicable together with": "02450/02452",
+        "Academic prerequisites": "(01001/01002/01003/01004/01005).­(02402/02403).­(02002/02101/02102/02525/02631/02632/02633/02692) , Basic course in linear algebra and calculus, basic knowledge of probability theory or statistics, basic knowledge of Python.",
+        "Responsible": "Morten Mørup , Ph. (+45) 4525 3900 , mmor@dtu.dk",
+        "Course co-responsible": [
+            "Bjørn Sand Jensen (Primary contact person) , bjje@dtu.dk",
+            "Georgios Arvanitidis , Lyngby Campus, Building 321, Ph. (+45) 4525 5241 , gear@dtu.dk",
+        ],
+        "Department": "01 Department of Applied Mathematics and Computer Science",
+        "Home page": "http://www.compute.dtu.dk/courses/02450",
+        "Registration Sign up": "At the Studyplanner",
+        "Green challenge participation": "Please contact the teacher for information on whether this course gives the student the opportunity to prepare a project that may participate in DTU´s Study Conference on sustainability, climate technology, and the environment (GRØN DYST). More infor http://www.groendyst.dtu.dk/english",
+    },
+    "learning_objectives": [
+        "Explain the major steps involved in data modeling from preparing the data, modeling the data to evaluating and disseminating the results.",
+        "Discuss key machine learning concepts such as feature extraction, cross-validation, generalization and over-fitting, prediction, curse of dimensionality, and the bias-variance trade-off.",
+        "Match practical problems to standard data modeling problems such as dimensionality reduction, regression, classification, density estimation and clustering.",
+        "Explain how a relevant set of machine learning methods works.",
+        "Describe assumptions, strengths, and limitations of relevant machine learning methods.",
+        "Apply, modify, and implement central aspects of machine learning algorithms in Python",
+        "Apply visualization techniques and statistics to evaluate model performance, identify patterns and data issues.",
+        "Select, combine and modify data modeling tools in order to analyze data and disseminate the results of the analysis.",
     ],
-    "Exam duration": "Written exam: 4 hours",
-    "Aid": [
-      "No Aid : Multiple choice.",
-      "No electronic aids (e.g., calculators).",
-      "Only allowed to bring two A4 sheets of handwritten notes."
+}
+{
+    "course_code": "02451",
+    "url": "https://kurser.dtu.dk/course/02451",
+    "title": "02451 Introduction to Machine Learning",
+    "academic_year": "2025/2026",
+    "fields": {
+        "Danish title": "Introduktion til machine learning",
+        "Language of instruction": "English",
+        "Point( ECTS )": 5,
+        "Course type": "BScOffered as a single course",
+        "Schedule": "Spring F4A (Tues 13-17)",
+        "Location": "Campus Lyngby",
+        "Scope and form": "The activities alternate between lectures, problem classes and hands-on Python exercises.",
+        "Duration of Course": "13 weeks",
+        "Date of examination": 'The exam will be held on a special day: Click "Date of examination" to the left to see the date see DT',
+        "Type of assessment": [
+            "Written examination and exercises",
+            "Approval of assignments is a prerequisite for passing the course.",
+        ],
+        "Exam duration": "Written exam: 4 hours",
+        "Aid": [
+            "No Aid : Multiple choice.",
+            "No electronic aids (e.g., calculators).",
+            "Only allowed to bring two A4 sheets of handwritten notes.",
+        ],
+        "Evaluation": "7 step scale , external examiner",
+        "Previous Course": 2450,
+        "Not applicable together with": "02450/02452",
+        "Academic prerequisites": "(01001/01002/01003/01004/01005).\xad(02402/02403).\xad(02002/02101/02102/02525/02631/02632/02633/02692) , Basic course in linear algebra and calculus, basic knowledge of probability theory or statistics, basic knowledge of Python.",
+        "Responsible": "Morten Mørup , Ph. (+45) 4525 3900 , mmor@dtu.dk",
+        "Course co-responsible": [
+            "Bjørn Sand Jensen (Primary contact person) , bjje@dtu.dk",
+            "Georgios Arvanitidis , Lyngby Campus, Building 321, Ph. (+45) 4525 5241 , gear@dtu.dk",
+        ],
+        "Department": "01 Department of Applied Mathematics and Computer Science",
+        "Home page": "http://www.compute.dtu.dk/courses/02450",
+        "Registration Sign up": "At the Studyplanner",
+        "Green challenge participation": "Please contact the teacher for information on whether this course gives the student the opportunity to prepare a project that may participate in DTU´s Study Conference on sustainability, climate technology, and the environment (GRØN DYST). More infor http://www.groendyst.dtu.dk/english",
+    },
+    "learning_objectives": [
+        "Explain the major steps involved in data modeling from preparing the data, modeling the data to evaluating and disseminating the results.",
+        "Discuss key machine learning concepts such as feature extraction, cross-validation, generalization and over-fitting, prediction, curse of dimensionality, and the bias-variance trade-off.",
+        "Match practical problems to standard data modeling problems such as dimensionality reduction, regression, classification, density estimation and clustering.",
+        "Explain how a relevant set of machine learning methods works.",
+        "Describe assumptions, strengths, and limitations of relevant machine learning methods.",
+        "Apply, modify, and implement central aspects of machine learning algorithms in Python",
+        "Apply visualization techniques and statistics to evaluate model performance, identify patterns and data issues.",
+        "Select, combine and modify data modeling tools in order to analyze data and disseminate the results of the analysis.",
     ],
-    "Evaluation": "7 step scale , external examiner",
-    "Previous Course": 2450,
-    "Not applicable together with": "02450/02452",
-    "Academic prerequisites": "(01001/01002/01003/01004/01005).­(02402/02403).­(02002/02101/02102/02525/02631/02632/02633/02692) , Basic course in linear algebra and calculus, basic knowledge of probability theory or statistics, basic knowledge of Python.",
-    "Responsible": "Morten Mørup , Ph. (+45) 4525 3900 , mmor@dtu.dk",
-    "Course co-responsible": [
-      "Bjørn Sand Jensen (Primary contact person) , bjje@dtu.dk",
-      "Georgios Arvanitidis , Lyngby Campus, Building 321, Ph. (+45) 4525 5241 , gear@dtu.dk"
-    ],
-    "Department": "01 Department of Applied Mathematics and Computer Science",
-    "Home page": "http://www.compute.dtu.dk/courses/02450",
-    "Registration Sign up": "At the Studyplanner",
-    "Green challenge participation": "Please contact the teacher for information on whether this course gives the student the opportunity to prepare a project that may participate in DTU´s Study Conference on sustainability, climate technology, and the environment (GRØN DYST). More infor http://www.groendyst.dtu.dk/english"
-  },
-  "learning_objectives": [
-    "Explain the major steps involved in data modeling from preparing the data, modeling the data to evaluating and disseminating the results.",
-    "Discuss key machine learning concepts such as feature extraction, cross-validation, generalization and over-fitting, prediction, curse of dimensionality, and the bias-variance trade-off.",
-    "Match practical problems to standard data modeling problems such as dimensionality reduction, regression, classification, density estimation and clustering.",
-    "Explain how a relevant set of machine learning methods works.",
-    "Describe assumptions, strengths, and limitations of relevant machine learning methods.",
-    "Apply, modify, and implement central aspects of machine learning algorithms in Python",
-    "Apply visualization techniques and statistics to evaluate model performance, identify patterns and data issues.",
-    "Select, combine and modify data modeling tools in order to analyze data and disseminate the results of the analysis."
-  ]
 }

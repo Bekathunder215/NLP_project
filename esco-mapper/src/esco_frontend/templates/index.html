@@ -31,12 +31,7 @@
         margin: 0;
         font-family: "Space Grotesk", sans-serif;
         color: var(--ink);
-        background: radial-gradient(
-          circle at top,
-          #fff3dc 0%,
-          #f3efe6 55%,
-          #ece7dc 100%
-        );
+        background: radial-gradient(circle at top, #fff3dc 0%, #f3efe6 55%, #ece7dc 100%);
         min-height: 100vh;
         padding: 48px clamp(16px, 4vw, 64px) 64px;
         position: relative;
@@ -50,11 +45,7 @@
         border-radius: 999px;
         filter: blur(0px);
         opacity: 0.5;
-        background: radial-gradient(
-          circle,
-          var(--glow) 0%,
-          rgba(212, 119, 42, 0) 70%
-        );
+        background: radial-gradient(circle, var(--glow) 0%, rgba(212, 119, 42, 0) 70%);
         animation: float 12s ease-in-out infinite;
       }
 
@@ -241,6 +232,21 @@
         flex-wrap: wrap;
         gap: 8px;
       }
+      #detail-occupations .result-list {
+        max-height: 260px; /* ~6–7 items */
+        overflow-y: auto;
+        padding-right: 6px;
+      }
+
+      /* optional nicer scrollbar */
+      #detail-occupations .result-list::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      #detail-occupations .result-list::-webkit-scrollbar-thumb {
+        background: rgba(0, 0, 0, 0.2);
+        border-radius: 10px;
+      }
 
       .skill {
         background: rgba(212, 119, 42, 0.16);
@@ -300,8 +306,7 @@
       <p class="eyebrow">ESCO Mapper</p>
       <h1>Match DTU courses to ESCO skills with a search-first workflow.</h1>
       <p class="subhead">
-        Use dense, sparse, or hybrid search and inspect the matched skills for
-        each course.
+        Use dense, sparse, or hybrid search and inspect the matched skills for each course.
       </p>
     </header>
 
@@ -315,12 +320,7 @@
           </label>
           <label>
             <span>Query</span>
-            <input
-              id="query"
-              type="text"
-              placeholder="recommender systems"
-              required
-            />
+            <input id="query" type="text" placeholder="recommender systems" required />
           </label>
           <div class="grid">
             <label>
@@ -338,14 +338,7 @@
           </div>
           <label id="alpha-wrap" class="range">
             <span>Hybrid balance</span>
-            <input
-              id="alpha"
-              type="range"
-              min="0"
-              max="1"
-              step="0.05"
-              value="0.6"
-            />
+            <input id="alpha" type="range" min="0" max="1" step="0.05" value="0.6" />
             <span id="alpha-value">0.60</span>
           </label>
           <button type="submit">Search courses</button>
@@ -366,7 +359,11 @@
           <h2>Course detail</h2>
           <span class="pill" id="detail-pill">select a course</span>
         </div>
-        <div id="detail" class="detail"></div>
+        <div id="detail" class="detail">
+          <div id="detail-header"></div>
+          <div id="detail-skills"></div>
+          <div id="detail-occupations"></div>
+        </div>
       </section>
     </main>
 
@@ -390,10 +387,7 @@
     </section>
 
     <footer class="footer">
-      <span
-        >Note: The browser calls the backend directly, so you may need CORS
-        enabled.</span
-      >
+      <span>Note: The browser calls the backend directly, so you may need CORS enabled.</span>
     </footer>
 
     <script>
@@ -411,6 +405,9 @@
       const detailEl = document.getElementById("detail");
       const detailPill = document.getElementById("detail-pill");
       const occupationInput = document.getElementById("occupation-uri");
+      const detailHeaderEl = document.getElementById("detail-header");
+      const detailSkillsEl = document.getElementById("detail-skills");
+      const detailOccupationsEl = document.getElementById("detail-occupations");
       const occupationBtn = document.getElementById("occupation-btn");
       const occupationDetailEl = document.getElementById("occupation-detail");
 
@@ -446,9 +443,7 @@
           const button = document.createElement("button");
           button.type = "button";
           button.textContent = "View details";
-          button.addEventListener("click", () =>
-            fetchDetails(item.course_number),
-          );
+          button.addEventListener("click", () => fetchDetailsSkills(item.course_number));
 
           card.appendChild(title);
           card.appendChild(meta);
@@ -467,10 +462,7 @@
         // 1. Create a Regex to find the course number.
         // We use "\\b" (word boundaries) so we don't accidentally
         // delete part of a larger number (like deleting '101' from '10123').
-        const escapedNumber = courseNumber.replace(
-          /[.*+?^${}()|[\]\\]/g,
-          "\\$&",
-        );
+        const escapedNumber = courseNumber.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         const re = new RegExp(`\\b${escapedNumber}\\b`, "g");
 
         return title
@@ -480,48 +472,77 @@
           .trim(); // Trim whitespace from ends
       }
 
-      function renderDetail(detail) {
-        detailEl.innerHTML = "";
+      function renderDetailSkill(detail, occupationData) {
         if (!detail) {
-          detailEl.textContent = "Select a course to see details.";
+          detailHeaderEl.textContent = "Select a course to see details.";
+          detailSkillsEl.innerHTML = "";
+          detailOccupationsEl.innerHTML = "";
           return;
         }
 
         const cleanTitle = filterTitleClean(detail.title, detail.course_number);
 
-        const heading = document.createElement("div");
-        heading.innerHTML = `<strong>${detail.course_number}</strong> ${cleanTitle}`;
+        // ---------------- HEADER ----------------
+        detailHeaderEl.innerHTML = `
+    <div>
+      <strong>${detail.course_number}</strong> ${cleanTitle}
+    </div>
+    <div>${detail.description || "No description available."}</div>
+    <div>${detail.ects ? `ECTS: ${detail.ects}` : "ECTS: n/a"}</div>
+  `;
 
-        const description = document.createElement("div");
-        description.textContent =
-          detail.description || "No description available.";
-
-        const ects = document.createElement("div");
-        ects.textContent = detail.ects ? `ECTS: ${detail.ects}` : "ECTS: n/a";
+        // ---------------- SKILLS ----------------
+        detailSkillsEl.innerHTML = "";
 
         const skillWrap = document.createElement("div");
         skillWrap.className = "skill-list";
 
-        if (detail.matched_skills && detail.matched_skills.length > 0) {
-          detail.matched_skills.forEach((skill) => {
-            const chip = document.createElement("button");
-            chip.className = "skill";
-            chip.textContent = skill.label;
+        const skillHeading = document.createElement("div");
+        skillHeading.innerHTML = "<strong>Skills</strong>";
+        skillHeading.style.marginTop = "12px";
 
-            chip.addEventListener("click", () => {
-              fetchSkill(skill.skill_uri);
+        skillWrap.appendChild(skillHeading);
+
+        (detail.matched_skills || []).forEach((skill) => {
+          const chip = document.createElement("button");
+          chip.className = "skill";
+          chip.textContent = skill.label;
+
+          chip.addEventListener("click", () => {
+            fetchSkill(skill.skill_uri);
+          });
+
+          skillWrap.appendChild(chip);
+        });
+
+        detailSkillsEl.appendChild(skillWrap);
+
+        // ---------------- OCCUPATIONS ----------------
+        detailOccupationsEl.innerHTML = "";
+
+        if (occupationData?.relevant_occupations?.length > 0) {
+          const occHeading = document.createElement("div");
+          occHeading.innerHTML = "<strong>Occupations</strong>";
+          occHeading.style.marginTop = "16px";
+
+          const occWrap = document.createElement("div");
+          occWrap.className = "skill-list";
+
+          occupationData.relevant_occupations.forEach((occ) => {
+            const btn = document.createElement("button");
+            btn.className = "skill";
+            btn.textContent = occ.label;
+
+            btn.addEventListener("click", () => {
+              fetchOccupation(occ.occupation_uri);
             });
 
-            skillWrap.appendChild(chip);
+            occWrap.appendChild(btn);
           });
-        } else {
-          skillWrap.textContent = "No matched skills";
-        }
 
-        detailEl.appendChild(heading);
-        detailEl.appendChild(description);
-        detailEl.appendChild(ects);
-        detailEl.appendChild(skillWrap);
+          detailOccupationsEl.appendChild(occHeading);
+          detailOccupationsEl.appendChild(occWrap);
+        }
       }
 
       async function fetchSkill(skillUri) {
@@ -530,9 +551,7 @@
         try {
           setStatus("Loading skill details...");
 
-          const response = await fetch(
-            `${base}/skills/?uri=${encodeURIComponent(skillUri)}`,
-          );
+          const response = await fetch(`${base}/skills/?uri=${encodeURIComponent(skillUri)}`);
 
           if (!response.ok) {
             throw new Error("Failed to load skill details.");
@@ -555,8 +574,7 @@
           title.textContent = skill.label || "Skill";
 
           const description = document.createElement("p");
-          description.textContent =
-            skill.description || "No description available.";
+          description.textContent = skill.description || "No description available.";
 
           const coursesButton = document.createElement("button");
           coursesButton.textContent = "View related courses";
@@ -584,7 +602,7 @@
                 courses.courses.forEach((course) => {
                   const item = document.createElement("div");
                   item.style.marginBottom = "8px";
-                  item.textContent = `${course.course_number} - ${course.title}`;
+                  item.textContent = `${course.course_number} - ${filterTitleClean(course.title, course.course_number)}`;
                   courseList.appendChild(item);
                 });
               }
@@ -608,11 +626,11 @@
         }
       }
 
-      async function fetchOccupation() {
+      async function fetchOccupation(eventClick) {
         const base = baseInput.value.trim().replace(/\/$/, "");
         const occupationUri = occupationInput.value.trim();
 
-        if (!occupationUri) {
+        if (!occupationUri && !eventClick) {
           setStatus("Enter an occupation URI.", true);
           return;
         }
@@ -620,9 +638,8 @@
         try {
           setStatus("Loading occupation...");
 
-          const response = await fetch(
-            `${base}/occupations?uri=${encodeURIComponent(occupationUri)}`,
-          );
+          const uriToFetch = eventClick || occupationUri;
+          const response = await fetch(`${base}/occupations?uri=${encodeURIComponent(uriToFetch)}`);
 
           if (!response.ok) {
             throw new Error("Failed to load occupation.");
@@ -656,6 +673,7 @@
     `;
 
           const courses = document.createElement("div");
+          console.log(data.recommended_courses);
           courses.innerHTML = `
       <strong>Recommended courses</strong>
       <div class="result-list">
@@ -667,7 +685,7 @@
                   ${c.title || "Untitled"}
                 </div>
                 <div class="result-meta">
-                  ${c.course_number || ""}
+                  ${c.description || ""}
                 </div>
               </div>
             `,
@@ -687,21 +705,40 @@
         }
       }
 
-      async function fetchDetails(courseNumber) {
+      async function fetchDetailsSkills(courseNumber) {
         const base = baseInput.value.trim().replace(/\/$/, "");
         setStatus("Loading course details...");
         try {
+          let occupationData = null;
           const response = await fetch(`${base}/courses/${courseNumber}`);
           if (!response.ok) {
             throw new Error("Failed to load course detail.");
           }
+          try {
+            occupationData = await fetchDetailsOccupation(courseNumber);
+          } catch (e) {
+            console.error(e);
+          }
+
           const detail = await response.json();
           detailPill.textContent = courseNumber;
-          renderDetail(detail);
+          renderDetailSkill(detail, occupationData);
           setStatus("Detail loaded.");
         } catch (error) {
           setStatus(error.message, true);
         }
+      }
+
+      async function fetchDetailsOccupation(courseNumber) {
+        const base = baseInput.value.trim().replace(/\/$/, "");
+        try {
+          const response = await fetch(`${base}/courses/${courseNumber}/occupations`);
+          if (!response.ok) {
+            throw new Error("Failed to load course detail.");
+          }
+          const detail = await response.json();
+          return detail;
+        } catch (error) {}
       }
 
       async function handleSubmit(event) {
@@ -730,9 +767,7 @@
           }
           const payload = await response.json();
           renderResults(payload.results || []);
-          resultCountEl.textContent = payload.results
-            ? payload.results.length
-            : 0;
+          resultCountEl.textContent = payload.results ? payload.results.length : 0;
           setStatus("Search complete.");
         } catch (error) {
           setStatus(error.message, true);
@@ -746,7 +781,7 @@
 
       toggleAlpha();
       updateAlphaValue();
-      renderDetail(null);
+      renderDetailSkill(null, null);
     </script>
   </body>
 </html>
